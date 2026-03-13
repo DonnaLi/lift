@@ -1,4 +1,5 @@
 # LIFT — Workout Tracker
+<img width="5488" height="2036" alt="lift" src="https://github.com/user-attachments/assets/955845b5-a437-4f24-802d-e0766096292b" />
 
 A SwiftUI iOS app for tracking workouts, routines, and streaks.
 
