@@ -146,8 +146,17 @@ final class RoutineStore: ObservableObject {
         routines[idx] = routine
     }
 
-    func setTodaysRoutine(id: UUID?) {
-        todaysRoutineId = id
+    /// Set today's routine from schedule (call from Home onAppear so opening a card doesn't change it)
+    func refreshTodaysRoutineFromSchedule() {
+        todaysRoutineId = routines.first(where: { isScheduledToday($0) })?.id ?? routines.first?.id
+    }
+
+    /// Number of check-ins on the given calendar day (across all routines).
+    func checkInCount(for date: Date) -> Int {
+        let startOfDay = calendar.startOfDay(for: date)
+        return routines.reduce(0) { sum, r in
+            sum + r.checkInDates.filter { calendar.isDate($0, inSameDayAs: startOfDay) }.count
+        }
     }
 
     /// Check-ins in the last 7 days across all routines
@@ -158,8 +167,62 @@ final class RoutineStore: ObservableObject {
         }
     }
 
+    /// Check-ins in the last 30 days across all routines
+    var checkInsInLast30Days: Int {
+        let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        return routines.reduce(0) { sum, r in
+            sum + r.checkInDates.filter { $0 >= thirtyDaysAgo }.count
+        }
+    }
+
+    /// Total check-ins across all routines
+    var totalCheckIns: Int {
+        routines.reduce(0) { sum, r in sum + r.checkInDates.count }
+    }
+
+    /// Number of unique calendar days with at least one check-in in the last 30 days
+    var activeDaysInLast30: Int {
+        let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        var dayStarts: Set<Date> = []
+        for r in routines {
+            for d in r.checkInDates where d >= thirtyDaysAgo {
+                dayStarts.insert(calendar.startOfDay(for: d))
+            }
+        }
+        return dayStarts.count
+    }
+
+    /// Last N weeks of check-in counts (week starts on calendar's first weekday). Returns (label, count) for bar chart.
+    func weeklyCheckInData(numberOfWeeks: Int = 8) -> [(label: String, count: Int)] {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "M/d"
+        var result: [(label: String, count: Int)] = []
+        let now = Date()
+        guard let weekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start else { return result }
+        for offset in (0..<numberOfWeeks).reversed() {
+            guard let weekBegin = calendar.date(byAdding: .weekOfYear, value: -offset, to: weekStart) else { continue }
+            let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekBegin) ?? weekBegin
+            let count = routines.reduce(0) { sum, r in
+                sum + r.checkInDates.filter { $0 >= weekBegin && $0 < weekEnd }.count
+            }
+            result.append((formatter.string(from: weekBegin), count))
+        }
+        return result
+    }
+
     var bestStreak: Int {
         routines.map(\.currentStreak).max() ?? 0
+    }
+
+    /// Current streak for today's routine
+    var currentStreak: Int {
+        todaysRoutine?.currentStreak ?? 0
+    }
+
+    /// Approximate average weekly check-ins over the last 30 days (e.g. total / 4)
+    var avgWeeklyStreak: Int {
+        guard checkInsInLast30Days > 0 else { return 0 }
+        return max(1, checkInsInLast30Days / 4)
     }
 
     /// Seed with default routines for demo

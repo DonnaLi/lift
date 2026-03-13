@@ -8,6 +8,7 @@ import SwiftUI
 struct RoutineDetailView: View {
     @EnvironmentObject var store: RoutineStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage("useKg") private var useKg = true
     let routine: Routine
 
@@ -39,9 +40,6 @@ struct RoutineDetailView: View {
                         .foregroundStyle(LiftDesign.destructiveRed)
                 }
             }
-        }
-        .onAppear {
-            store.setTodaysRoutine(id: routine.id)
         }
     }
 
@@ -90,7 +88,7 @@ struct RoutineDetailView: View {
                         .fill(LiftDesign.borderLight)
                         .frame(height: 10)
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.black)
+                        .fill(Color.primary)
                         .frame(width: max(0, geo.size.width * CGFloat(routine.checkInCount) / CGFloat(max(1, routine.durationDays))), height: 10)
                 }
             }
@@ -105,7 +103,7 @@ struct RoutineDetailView: View {
             }
         }
         .padding(LiftDesign.cardPadding)
-        .background(LiftDesign.cardBackground)
+        .background(LiftDesign.cardBackground(for: colorScheme))
         .clipShape(RoundedRectangle(cornerRadius: LiftDesign.cardRadius))
     }
 

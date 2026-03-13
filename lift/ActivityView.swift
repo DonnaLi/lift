@@ -6,21 +6,33 @@
 import SwiftUI
 
 struct ActivityView: View {
-    private let activityMonths = ["Sep", "Oct", "Nov", "Dec", "Jan", "Feb"]
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 3), count: 7)
+    @EnvironmentObject var store: RoutineStore
+    @Environment(\.colorScheme) private var colorScheme
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 5), count: 7)
+    private let calendar = Calendar.current
 
-    private let recentCheckIns: [(date: String, workout: String, showDot: Bool)] = [
-        ("Feb 22", "Chest + Tricep", false),
-        ("Feb 16", "Back + Bicep + Legs", true),
-        ("Feb 13", "Chest + Tricep", false),
-        ("Feb 9", "Back + Bicep + Legs", true),
-        ("Feb 2", "Back + Bicep + Legs", true),
-        ("Feb 1", "Chest + Tricep", false),
-        ("Jan 30", "Chest + Tricep", false),
-        ("Jan 26", "Back + Bicep + Legs", true),
-        ("Jan 25", "Chest + Tricep", false),
-        ("Jan 19", "Back + Bicep + Legs", true),
-    ]
+    private var activityMonthInfos: [(label: String, cellLevels: [Int])] {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM"
+        return (0..<3).reversed().compactMap { offset -> (String, [Int])? in
+            guard let date = calendar.date(byAdding: .month, value: -offset, to: Date()) else { return nil }
+            let year = calendar.component(.year, from: date)
+            let month = calendar.component(.month, from: date)
+            let label = formatter.string(from: date)
+            let levels = heatmapLevels(year: year, month: month)
+            return (label, levels)
+        }
+    }
+
+    private var recentCheckIns: [(date: String, workout: String, showDot: Bool)] {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        let all: [(Date, String)] = store.routines.flatMap { r in
+            r.checkInDates.map { ($0, r.name) }
+        }
+        let sorted = all.sorted { $0.0 > $1.0 }
+        return sorted.prefix(10).map { (date: formatter.string(from: $0.0), workout: $0.1, showDot: true) }
+    }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: true) {
@@ -44,52 +56,53 @@ struct ActivityView: View {
         VStack(alignment: .leading, spacing: 12) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 10) {
-                    ForEach(activityMonths, id: \.self) { month in
+                    ForEach(Array(activityMonthInfos.enumerated()), id: \.offset) { _, info in
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(month)
+                            Text(info.label)
                                 .font(.caption2)
                                 .foregroundStyle(LiftDesign.textSecondary)
-                            LazyVGrid(columns: columns, spacing: 3) {
-                                ForEach(0..<daysInMonth(month), id: \.self) { idx in
+                            LazyVGrid(columns: columns, spacing: 5) {
+                                ForEach(Array(info.cellLevels.enumerated()), id: \.offset) { _, level in
                                     Circle()
-                                        .fill(activityColor(month: month, index: idx))
-                                        .frame(width: 8, height: 8)
+                                        .fill(LiftDesign.heatmapColor(level: level, isDark: colorScheme == .dark))
+                                        .frame(width: 12, height: 12)
                                 }
                             }
                         }
-                        .frame(minWidth: 44)
+                        .frame(minWidth: 56)
                     }
                 }
                 .padding(.horizontal, 4)
             }
             HStack(spacing: 12) {
                 Spacer()
-                activityLegendItem(color: LiftDesign.heatmapEmpty, text: "0")
-                activityLegendItem(color: LiftDesign.heatmapLow, text: "1")
-                activityLegendItem(color: LiftDesign.heatmapHigh, text: "2+")
+                activityLegendItem(color: LiftDesign.heatmapColor(level: 0, isDark: colorScheme == .dark), text: "0")
+                activityLegendItem(color: LiftDesign.heatmapColor(level: 1, isDark: colorScheme == .dark), text: "1")
+                activityLegendItem(color: LiftDesign.heatmapColor(level: 2, isDark: colorScheme == .dark), text: "2+")
             }
             .font(.caption2)
             .foregroundStyle(LiftDesign.textSecondary)
         }
         .padding(LiftDesign.cardPadding)
-        .background(LiftDesign.cardBackground)
+        .background(LiftDesign.cardBackground(for: colorScheme))
         .clipShape(RoundedRectangle(cornerRadius: LiftDesign.cardRadius))
     }
 
-    private func daysInMonth(_ month: String) -> Int {
-        switch month {
-        case "Sep", "Nov": return 30
-        case "Oct", "Dec", "Jan": return 31
-        case "Feb": return 28
-        default: return 30
+    private func heatmapLevels(year: Int, month: Int) -> [Int] {
+        guard let firstDay = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
+              let range = calendar.range(of: .day, in: .month, for: firstDay) else { return [] }
+        let daysInMonth = range.count
+        let weekday = calendar.component(.weekday, from: firstDay)
+        let leading = weekday - 1
+        let totalCells = ((leading + daysInMonth + 6) / 7) * 7
+        return (0..<totalCells).map { i in
+            if i < leading { return 0 }
+            let day = i - leading + 1
+            if day > daysInMonth { return 0 }
+            guard let date = calendar.date(byAdding: .day, value: day - 1, to: firstDay) else { return 0 }
+            let count = store.checkInCount(for: date)
+            return min(2, count)
         }
-    }
-
-    private func activityColor(month: String, index: Int) -> Color {
-        let seed = (month.hashValue + index) % 5
-        if seed == 0 { return LiftDesign.heatmapHigh }
-        if seed <= 2 { return LiftDesign.heatmapLow }
-        return LiftDesign.heatmapEmpty
     }
 
     private func activityLegendItem(color: Color, text: String) -> some View {
@@ -134,7 +147,7 @@ struct ActivityView: View {
                     .padding(.horizontal, 16)
                 }
             }
-            .background(LiftDesign.cardBackground)
+            .background(LiftDesign.cardBackground(for: colorScheme))
             .clipShape(RoundedRectangle(cornerRadius: LiftDesign.cardRadius))
 
             Button {} label: {
@@ -149,4 +162,5 @@ struct ActivityView: View {
 
 #Preview {
     ActivityView()
+        .environmentObject(RoutineStore.withDefaults())
 }

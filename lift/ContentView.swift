@@ -12,7 +12,7 @@ struct ContentView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            HomeView()
+            HomeView(selectedTab: $selectedTab)
                 .tabItem {
                     Image(systemName: "square.grid.2x2")
                     Text("Home")
@@ -51,6 +51,7 @@ struct ContentView: View {
 // MARK: - Home View (Dashboard) — matches LIFT Workout Tracker layout
 struct HomeView: View {
     @EnvironmentObject var store: RoutineStore
+    @Binding var selectedTab: Int
     @State private var showNewRoutine = false
 
     private let greeting: String = {
@@ -76,6 +77,7 @@ struct HomeView: View {
             }
             .scrollBounceBehavior(.basedOnSize)
             .background(LiftDesign.backgroundAlt.ignoresSafeArea())
+            .onAppear { store.refreshTodaysRoutineFromSchedule() }
         }
         .sheet(isPresented: $showNewRoutine) {
             NewRoutineView(onCreate: { routine in
@@ -179,25 +181,30 @@ struct HomeView: View {
     }
 
     private var workoutHistorySection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                LiftDesign.sectionLabel("WORKOUT HISTORY")
-                Spacer()
-                HStack(spacing: 6) {
-                    Text("\(store.checkInsThisWeek) this week")
-                        .font(.caption)
-                        .foregroundStyle(LiftDesign.textSecondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(LiftDesign.borderLight)
-                        .clipShape(Capsule())
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(LiftDesign.textSecondary)
+        Button {
+            selectedTab = 1
+        } label: {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    LiftDesign.sectionLabel("WORKOUT HISTORY")
+                    Spacer()
+                    HStack(spacing: 6) {
+                        Text("\(store.checkInsThisWeek) this week")
+                            .font(.caption)
+                            .foregroundStyle(LiftDesign.textSecondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(LiftDesign.borderLight)
+                            .clipShape(Capsule())
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(LiftDesign.textSecondary)
+                    }
                 }
+                WorkoutHeatmapView()
             }
-            WorkoutHeatmapView()
         }
+        .buttonStyle(.plain)
     }
 
 }
@@ -225,10 +232,13 @@ struct CheckInButton: View {
     let action: () -> Void
 
     private var uncheckedBackground: Color {
-        colorScheme == .dark ? Color(uiColor: .secondarySystemBackground) : Color.black
+        colorScheme == .dark ? Color.white : Color.black
     }
     private var uncheckedForeground: Color {
-        colorScheme == .dark ? Color.primary : .white
+        colorScheme == .dark ? Color.black : Color.white
+    }
+    private var checkedForeground: Color {
+        colorScheme == .dark ? Color.white : LiftDesign.textPrimary
     }
 
     var body: some View {
@@ -238,7 +248,7 @@ struct CheckInButton: View {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")
                             .fontWeight(.semibold)
-                            .foregroundStyle(LiftDesign.checkmarkGreen)
+                            .foregroundStyle(checkedForeground)
                         Text("Checked In")
                             .fontWeight(.semibold)
                     }
@@ -251,7 +261,7 @@ struct CheckInButton: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(isCheckedIn ? LiftDesign.successGreen : uncheckedBackground)
-            .foregroundStyle(isCheckedIn ? LiftDesign.textPrimary : uncheckedForeground)
+            .foregroundStyle(isCheckedIn ? checkedForeground : uncheckedForeground)
             .clipShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
@@ -260,6 +270,7 @@ struct CheckInButton: View {
 
 // MARK: - Today Workout Card
 struct TodayWorkoutCard: View {
+    @Environment(\.colorScheme) private var colorScheme
     let title: String
     let detail: String
     let isCheckedIn: Bool
@@ -295,7 +306,7 @@ struct TodayWorkoutCard: View {
             CheckInButton(isCheckedIn: isCheckedIn, action: onCheckIn)
         }
         .padding(LiftDesign.cardPadding)
-        .background(LiftDesign.cardBackground)
+        .background(LiftDesign.cardBackground(for: colorScheme))
         .clipShape(RoundedRectangle(cornerRadius: LiftDesign.cardRadius))
     }
 }
@@ -322,23 +333,21 @@ struct RoutineCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
+                ZStack {
+                    Circle()
+                        .fill(numberCircleFill)
+                        .frame(width: 36, height: 36)
+                    Text("\(number)")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(numberCircleText)
+                }
+                Spacer()
                 if isTodaysAndCheckedIn {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title2)
                         .foregroundStyle(LiftDesign.checkmarkGreen)
                 } else {
-                    ZStack {
-                        Circle()
-                            .fill(numberCircleFill)
-                            .frame(width: 36, height: 36)
-                        Text("\(number)")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(numberCircleText)
-                    }
-                }
-                Spacer()
-                if !isTodaysAndCheckedIn {
                     Button {} label: {
                         Image(systemName: "pencil")
                             .font(.caption)
@@ -366,13 +375,14 @@ struct RoutineCard: View {
         }
         .padding(16)
         .frame(width: 160, height: 140)
-        .background(LiftDesign.cardBackground)
+        .background(LiftDesign.cardBackground(for: colorScheme))
         .clipShape(RoundedRectangle(cornerRadius: LiftDesign.cardRadius))
     }
 }
 
 // MARK: - Stat Card
 struct StatCard: View {
+    @Environment(\.colorScheme) private var colorScheme
     let icon: String
     let value: String
     let label: String
@@ -393,28 +403,43 @@ struct StatCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
-        .background(LiftDesign.cardBackground)
+        .background(LiftDesign.cardBackground(for: colorScheme))
         .clipShape(RoundedRectangle(cornerRadius: LiftDesign.cardRadius))
     }
 }
 
-// MARK: - Workout Heatmap
+// MARK: - Workout Heatmap (calendar-based, store-driven)
 struct WorkoutHeatmapView: View {
-    private let months = ["Dec", "Jan", "Feb"]
+    @EnvironmentObject var store: RoutineStore
+    @Environment(\.colorScheme) private var colorScheme
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+    private let calendar = Calendar.current
+
+    private var monthInfos: [(label: String, cellLevels: [Int])] {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM"
+        return (0..<3).reversed().compactMap { offset -> (String, [Int])? in
+            guard let date = calendar.date(byAdding: .month, value: -offset, to: Date()) else { return nil }
+            let year = calendar.component(.year, from: date)
+            let month = calendar.component(.month, from: date)
+            let label = formatter.string(from: date)
+            let levels = heatmapLevels(year: year, month: month)
+            return (label, levels)
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 16) {
-                ForEach(months, id: \.self) { month in
+                ForEach(Array(monthInfos.enumerated()), id: \.offset) { _, info in
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(month)
+                        Text(info.label)
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(LiftDesign.textSecondary)
                         LazyVGrid(columns: columns, spacing: 4) {
-                            ForEach(0..<heatmapCount(for: month), id: \.self) { idx in
+                            ForEach(Array(info.cellLevels.enumerated()), id: \.offset) { _, level in
                                 RoundedRectangle(cornerRadius: 3)
-                                    .fill(heatmapColor(for: month, index: idx))
+                                    .fill(LiftDesign.heatmapColor(level: level, isDark: colorScheme == .dark))
                                     .aspectRatio(1, contentMode: .fit)
                             }
                         }
@@ -422,32 +447,33 @@ struct WorkoutHeatmapView: View {
                 }
             }
             HStack(spacing: 16) {
-                heatmapLegendItem(color: LiftDesign.heatmapEmpty, text: "0")
-                heatmapLegendItem(color: LiftDesign.heatmapLow, text: "1")
-                heatmapLegendItem(color: LiftDesign.heatmapHigh, text: "2+")
+                heatmapLegendItem(color: LiftDesign.heatmapColor(level: 0, isDark: colorScheme == .dark), text: "0")
+                heatmapLegendItem(color: LiftDesign.heatmapColor(level: 1, isDark: colorScheme == .dark), text: "1")
+                heatmapLegendItem(color: LiftDesign.heatmapColor(level: 2, isDark: colorScheme == .dark), text: "2+")
             }
             .font(.caption2)
             .foregroundStyle(LiftDesign.textSecondary)
         }
         .padding(LiftDesign.cardPadding)
-        .background(LiftDesign.cardBackground)
+        .background(LiftDesign.cardBackground(for: colorScheme))
         .clipShape(RoundedRectangle(cornerRadius: LiftDesign.cardRadius))
     }
 
-    private func heatmapCount(for month: String) -> Int {
-        switch month {
-        case "Dec": return 31
-        case "Jan": return 31
-        case "Feb": return 28
-        default: return 28
+    private func heatmapLevels(year: Int, month: Int) -> [Int] {
+        guard let firstDay = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
+              let range = calendar.range(of: .day, in: .month, for: firstDay) else { return [] }
+        let daysInMonth = range.count
+        let weekday = calendar.component(.weekday, from: firstDay)
+        let leading = weekday - 1
+        let totalCells = ((leading + daysInMonth + 6) / 7) * 7
+        return (0..<totalCells).map { i in
+            if i < leading { return 0 }
+            let day = i - leading + 1
+            if day > daysInMonth { return 0 }
+            guard let date = calendar.date(byAdding: .day, value: day - 1, to: firstDay) else { return 0 }
+            let count = store.checkInCount(for: date)
+            return min(2, count)
         }
-    }
-
-    private func heatmapColor(for month: String, index: Int) -> Color {
-        let seed = (month.hashValue + index) % 7
-        if seed == 0 { return LiftDesign.heatmapHigh }
-        if seed <= 2 { return LiftDesign.heatmapLow }
-        return LiftDesign.heatmapEmpty
     }
 
     private func heatmapLegendItem(color: Color, text: String) -> some View {

@@ -6,6 +6,7 @@
 import SwiftUI
 
 struct NewRoutineView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @State private var name = ""
     @State private var selectedDays: Set<Weekday> = []
     @State private var durationDays = "30"
@@ -66,6 +67,8 @@ struct NewRoutineView: View {
 
     private func dayButton(_ day: Weekday) -> some View {
         let isSelected = selectedDays.contains(day)
+        let selectedBg = colorScheme == .dark ? Color(uiColor: .secondarySystemBackground) : Color.black
+        let selectedFg = colorScheme == .dark ? Color.primary : Color.white
         return Button {
             if isSelected {
                 selectedDays.remove(day)
@@ -77,8 +80,8 @@ struct NewRoutineView: View {
                 .font(.subheadline)
                 .fontWeight(.semibold)
                 .frame(width: 36, height: 36)
-                .background(isSelected ? Color.black : LiftDesign.borderLight)
-                .foregroundStyle(isSelected ? .white : LiftDesign.textPrimary)
+                .background(isSelected ? selectedBg : LiftDesign.borderLight)
+                .foregroundStyle(isSelected ? selectedFg : LiftDesign.textPrimary)
                 .clipShape(Circle())
         }
         .buttonStyle(.plain)
@@ -128,13 +131,15 @@ struct NewRoutineView: View {
         Button {
             createRoutine()
         } label: {
+            let primaryBg = colorScheme == .dark ? Color(uiColor: .secondarySystemBackground) : Color.black
+            let primaryFg = colorScheme == .dark ? Color.primary : Color.white
             Text("Create Routine")
                 .font(.headline)
                 .fontWeight(.semibold)
-                .foregroundStyle(.white)
+                .foregroundStyle(canCreate ? primaryFg : LiftDesign.textSecondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(canCreate ? Color.black : LiftDesign.borderLight)
+                .background(canCreate ? primaryBg : LiftDesign.borderLight)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
         }
         .buttonStyle(.plain)

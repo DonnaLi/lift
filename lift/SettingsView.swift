@@ -6,6 +6,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage("darkMode") private var darkMode = false
     @AppStorage("useKg") private var useKg = true
 
@@ -52,7 +53,7 @@ struct SettingsView: View {
                         toggleOn: .constant(false)
                     )
                 }
-                .background(LiftDesign.cardBackground)
+                .background(LiftDesign.cardBackground(for: colorScheme))
                 .clipShape(RoundedRectangle(cornerRadius: LiftDesign.cardRadius))
 
                 Button {} label: {
